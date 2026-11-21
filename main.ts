@@ -32,12 +32,21 @@ function main() {
   for (let i = 0; i < PNG_MAGIC.length; i++) {
     if (bytes[i] !== PNG_MAGIC[i]) die(POSTER_NAME + " is not a PNG file");
   }
+  // A truncated file can still carry a valid header, so refuse anything
+  // too short to hold the IHDR chunk before reading its dimensions.
+  if (bytes.length < 24) die(POSTER_NAME + " is too short to be a complete PNG");
   // PNG header layout: width lives at bytes 16-19, height at 20-23,
   // both big-endian 32-bit.
   const width = bytes.readUInt32BE(16);
   const height = bytes.readUInt32BE(20);
   if (width !== EXPECTED_WIDTH || height !== EXPECTED_HEIGHT) {
     die(POSTER_NAME + " is " + width + "x" + height + ", expected 1024x1024");
+  }
+  // The file must end with the IEND chunk, or it was cut off mid-write.
+  const IEND_TAIL = [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82];
+  const tail = bytes.subarray(bytes.length - IEND_TAIL.length);
+  for (let i = 0; i < IEND_TAIL.length; i++) {
+    if (tail[i] !== IEND_TAIL[i]) die(POSTER_NAME + " has no IEND trailer (truncated?)");
   }
 
   mkdirSync(outDir, { recursive: true });
